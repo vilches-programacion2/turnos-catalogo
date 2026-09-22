@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.idea/
+.gradle/
+.kotlin/
+build/
+target/
+local.properties
+.DS_Store
