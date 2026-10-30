@@ -1,12 +1,64 @@
+# Maven, Java y artefactos generados
+target/
+build/
+/out/
+/bin/
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+# Conservar el wrapper si se utiliza la variante con JAR.
+!.mvn/wrapper/maven-wrapper.jar
+
+# Entorno y caches locales del proyecto
+.java-env/
+.m2/
+.gradle/
+.kotlin/
+__pycache__/
+*.py[cod]
+
+# IDE y editores
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+.factorypath
+
+# Configuracion privada, credenciales y claves
 .env
 .env.*
 !.env.example
+secrets/
+.aws
 *.pem
 *.key
-.idea/
-.gradle/
-.kotlin/
-build/
-target/
-local.properties
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Notas y configuracion personales
+.local/
+.codex/
+
+# Logs, fallos de JVM y temporales
+logs/
+*.log
+hs_err_pid*
+replay_pid*
+.attach_pid*
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
 .DS_Store
+Thumbs.db
+desktop.ini

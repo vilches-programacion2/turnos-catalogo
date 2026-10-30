@@ -1,35 +1,46 @@
 # turnos-catalogo
 
-Servicio Java y Spring Boot para consultas locales y sincronización del catálogo mediante REST, Redis y Kafka.
+Servicio de catálogo y sincronización: Java 25, Spring Boot 4.1.0 y PostgreSQL 17.
+Paquete base: `catalogo`, con la misma organización hexagonal por funcionalidad
+que reservas. CAT-01 prepara arranque, configuración, logs y salud. Persistencia
+del catálogo, consultas protegidas y sincronización se implementarán en sus issues.
 
-## Estado
-Repositorio inicial de planificación. Las funcionalidades del backlog todavía no están implementadas.
+## Ejecutar
 
-## Trabajo
-- `dev`: integración cotidiana.
-- `test`: validación de entregas.
-- `main`: versión estable.
+Con Docker Compose:
 
-Crear ramas `feature/<numero>-<descripcion>` desde `dev` y abrir PR hacia `dev`. Promover conjuntos verificados a `test` y luego a `main`. Cerrar la issue al integrar en `dev` y cumplir sus criterios; las palabras automáticas de cierre pueden no ejecutarse hasta llegar a la rama predeterminada.
+```bash
+cp .env.example .env
+# Configurar DB_PASSWORD en .env.
+docker compose up --build -d
+curl --fail http://localhost:8082/actuator/health/readiness
+docker compose down
+```
 
-Ver [backlog](BACKLOG.md) y [guía de contribución](CONTRIBUTING.md).
+PostgreSQL se publica solo en localhost, puerto `5434`, y el servicio en `8082`.
+Ambos tienen recursos propios, separados de reservas. El volumen conserva los
+datos al detener los contenedores. Configuración en [.env.example](.env.example).
+Al ejecutar Java en el host, proporcionar las variables de entorno; Spring no
+carga `.env` automáticamente.
 
-## Restricciones
-Exactamente dos backends Java/Spring Boot y una app KMP Android. Bases servidor con propiedad y migraciones separadas. El anexo técnico oficial define contratos externos. Sin datos médicos reales.
+## Verificar
 
-## Conventional Commits
-Usar `<tipo>(<alcance>): <descripción concreta en español>`.
-Tipos: `feat`, `fix`, `docs`, `test`, `refactor`, `build`, `ci`, `chore`.
-Ejemplos:
-- `feat(catalogo): aplicar cambios incrementales por identificador de profesional`
-- `fix(reservas): impedir la cancelación de turnos de otro usuario`
-- `test(sync): cubrir recuperación tras perder la ventana incremental`
-Evitar mensajes como `cambios`, `arreglos` o `update`. Agregar en el cuerpo motivos,
-decisiones y referencia a la issue cuando ayuden. Usar también títulos de PR
-descriptivos con este formato, especialmente al integrar mediante squash.
+Con JDK 25 y Docker activos:
 
-## Integración de cátedra
-Se consumen los contratos que entreguen los profesores. La consigna menciona
-REST (API académica), Redis (catálogo e historial) y Kafka (eventos).
-No se asume que sean tres APIs HTTP independientes ni se inventa una integración adicional.
-Confirmar endpoints, topics, claves, payloads y validaciones al recibir el anexo.
+```bash
+./mvnw verify
+```
+
+La prueba usa PostgreSQL real con Testcontainers: arranque, log de inicio,
+endpoints cerrados y readiness/liveness ante caída de la base. Por ahora solo
+los GET de salud son públicos; JWT y consultas corresponden a CAT-03.
+
+Entorno Java aislado opcional, igual al de reservas:
+
+```bash
+./scripts/setup-java-env.sh /ruta/al/jdk-25
+./mvnw-local verify
+```
+
+Una rama por issue, con PR a `dev`. Promociones a `test` y `main` mediante PR.
+Licencia [GPL-3.0](LICENSE).
