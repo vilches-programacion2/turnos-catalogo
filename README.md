@@ -2,8 +2,9 @@
 
 Servicio de catálogo y sincronización: Java 25, Spring Boot 4.1.0 y PostgreSQL 17.
 Paquete base: `catalogo`, con la misma organización hexagonal por funcionalidad
-que reservas. CAT-01 prepara arranque, configuración, logs y salud. Persistencia
-del catálogo, consultas protegidas y sincronización se implementarán en sus issues.
+que reservas. CAT-01 prepara arranque, configuración, logs y salud. CAT-02 agrega
+persistencia de categorías, profesionales, horarios y versión con Flyway.
+Consultas protegidas y sincronización se implementarán en sus issues.
 
 ## Ejecutar
 
@@ -31,8 +32,8 @@ Con JDK 25 y Docker activos:
 ./mvnw verify
 ```
 
-La prueba usa PostgreSQL real con Testcontainers: arranque, log de inicio,
-endpoints cerrados y readiness/liveness ante caída de la base. Por ahora solo
+Las pruebas usan PostgreSQL real con Testcontainers: migraciones, persistencia,
+integridad referencial, transacciones, arranque y salud ante caída de la base. Solo
 los GET de salud son públicos; JWT y consultas corresponden a CAT-03.
 
 Entorno Java aislado opcional, igual al de reservas:
