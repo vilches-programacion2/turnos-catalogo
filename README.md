@@ -36,12 +36,7 @@ Las pruebas usan PostgreSQL real con Testcontainers: migraciones, persistencia,
 integridad referencial, transacciones, arranque y salud ante caída de la base. Solo
 los GET de salud son públicos; JWT y consultas corresponden a CAT-03.
 
-Entorno Java aislado opcional, igual al de reservas:
-
-```bash
-./scripts/setup-java-env.sh /ruta/al/jdk-25
-./mvnw-local verify
-```
+El wrapper incluido utiliza Maven 3.9.11; requiere JDK 25.
 
 Una rama por issue, con PR a `dev`. Promociones a `test` y `main` mediante PR.
 Licencia [GPL-3.0](LICENSE).

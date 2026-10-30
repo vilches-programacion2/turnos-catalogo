@@ -47,6 +47,8 @@ secrets/
 # Notas y configuracion personales
 .local/
 .codex/
+/mvnw-local
+/scripts/setup-java-env.sh
 
 # Logs, fallos de JVM y temporales
 logs/
