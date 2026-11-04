@@ -161,6 +161,7 @@ class CatalogoConsultasIntegrationTest {
         assertThat(get("/api/professionals", token).statusCode()).isEqualTo(403);
         assertThat(get("/actuator/env", token).statusCode()).isEqualTo(403);
         assertThat(get("/api/authenticate", token).statusCode()).isEqualTo(403);
+        assertThat(get("/api/student/integration", token).statusCode()).isEqualTo(403);
     }
 
     @Test
