@@ -1,12 +1,16 @@
 package catalogo.replica.infrastructure.persistence.adapter;
 
 import java.util.Optional;
+import java.util.List;
+import java.util.Comparator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import catalogo.replica.domain.model.CategoriaProfesional;
 import catalogo.replica.domain.model.EstadoCatalogo;
 import catalogo.replica.domain.model.HorarioSemanal;
+import catalogo.replica.domain.model.LecturaProfesional;
 import catalogo.replica.domain.model.Profesional;
 import catalogo.replica.domain.ports.out.CatalogoRepository;
 import catalogo.replica.infrastructure.persistence.mapper.CategoriaProfesionalMapper;
@@ -73,5 +77,22 @@ public class JpaCatalogoRepositoryAdapter implements CatalogoRepository {
     @Transactional
     public EstadoCatalogo guardarEstado(EstadoCatalogo estado) {
         return estadoMapper.toDomainModel(estados.saveAndFlush(estadoMapper.toEntity(estado)));
+    }
+
+    @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public LecturaProfesional leerProfesional(Long id) {
+        var estado = estados.findById(1L).map(estadoMapper::toDomainModel).orElse(null);
+        if (estado == null) {
+            return LecturaProfesional.builder().horarios(List.of()).build();
+        }
+        var profesional = profesionales.findById(id).map(profesionalMapper::toDomainModel).orElse(null);
+        List<HorarioSemanal> agenda = profesional == null ? List.of()
+                : horarios.findByProfessionalIdAndEnabledTrue(id).stream()
+                        .map(horarioMapper::toDomainModel)
+                        .sorted(Comparator.comparing(HorarioSemanal::getDayOfWeek)
+                                .thenComparing(HorarioSemanal::getStartTime).thenComparing(HorarioSemanal::getId))
+                        .toList();
+        return LecturaProfesional.builder().estado(estado).profesional(profesional).horarios(agenda).build();
     }
 }

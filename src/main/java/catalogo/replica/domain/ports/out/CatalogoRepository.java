@@ -4,6 +4,7 @@ import java.util.Optional;
 import catalogo.replica.domain.model.CategoriaProfesional;
 import catalogo.replica.domain.model.EstadoCatalogo;
 import catalogo.replica.domain.model.HorarioSemanal;
+import catalogo.replica.domain.model.LecturaProfesional;
 import catalogo.replica.domain.model.Profesional;
 
 public interface CatalogoRepository {
@@ -15,4 +16,5 @@ public interface CatalogoRepository {
     Optional<HorarioSemanal> buscarHorario(Long id);
     Optional<EstadoCatalogo> obtenerEstado();
     EstadoCatalogo guardarEstado(EstadoCatalogo estado);
+    LecturaProfesional leerProfesional(Long id);
 }
