@@ -18,6 +18,7 @@ services:
 
   catalogo:
     build: .
+    user: "${APP_UID:-10001}:${APP_GID:-10001}"
     environment:
       DB_URL: jdbc:postgresql://catalogo-db:5432/${DB_NAME:-catalogo}
       DB_USER: ${DB_USER:-catalogo}
@@ -26,10 +27,21 @@ services:
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?Definir JWT_PUBLIC_KEY en .env}
       JWT_ISSUER: ${JWT_ISSUER:-https://turnos-reservas.local}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-turnos-catalogo}
+      CATEDRA_ENABLED: ${CATEDRA_ENABLED:-true}
+      CATEDRA_BASE_URL: ${CATEDRA_BASE_URL:?Definir CATEDRA_BASE_URL en .env}
+      CATEDRA_TOKEN_FILE: /run/secrets/catedra.jwt
+      CATEDRA_CONNECT_TIMEOUT: ${CATEDRA_CONNECT_TIMEOUT:-3s}
+      CATEDRA_READ_TIMEOUT: ${CATEDRA_READ_TIMEOUT:-5s}
     volumes:
       - type: bind
         source: ./secrets/public.pem
         target: /run/secrets/public.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CATEDRA_TOKEN_SOURCE:?Definir CATEDRA_TOKEN_SOURCE en .env}
+        target: /run/secrets/catedra.jwt
         read_only: true
         bind:
           create_host_path: false
