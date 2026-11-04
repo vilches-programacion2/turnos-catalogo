@@ -42,6 +42,7 @@ class PersistenceIntegrationTest {
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
+        JwtTestKeys.configurar(registry);
         registry.add("spring.datasource.url", DATABASE::getJdbcUrl);
         registry.add("spring.datasource.username", DATABASE::getUsername);
         registry.add("spring.datasource.password", DATABASE::getPassword);
@@ -218,10 +219,13 @@ class PersistenceIntegrationTest {
         var estado = catalogo.guardarEstado(estado(9L));
 
         try (var context = new SpringApplicationBuilder(TurnosCatalogoApplication.class)
-                .initializers(application -> TestPropertyValues.of(
+                .initializers(application -> {
+                    TestPropertyValues.of(JwtTestKeys.propiedades()).applyTo(application);
+                    TestPropertyValues.of(
                         "server.port=0", "spring.datasource.url=" + DATABASE.getJdbcUrl(),
                         "spring.datasource.username=" + DATABASE.getUsername(),
-                        "spring.datasource.password=" + DATABASE.getPassword()).applyTo(application))
+                        "spring.datasource.password=" + DATABASE.getPassword()).applyTo(application);
+                })
                 .run()) {
             var reabierto = context.getBean(CatalogoRepository.class);
             assertThat(reabierto.buscarCategoria(categoria.getId()).orElseThrow())
