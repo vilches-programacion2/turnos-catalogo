@@ -3,11 +3,13 @@ package catalogo.replica.infrastructure.persistence.adapter;
 import java.util.Optional;
 import java.util.List;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import jakarta.persistence.EntityManager;
+import org.hibernate.Session;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Isolation;
 import catalogo.replica.domain.model.CategoriaProfesional;
@@ -16,6 +18,10 @@ import catalogo.replica.domain.model.HorarioSemanal;
 import catalogo.replica.domain.model.LecturaProfesional;
 import catalogo.replica.domain.model.Profesional;
 import catalogo.replica.domain.model.SnapshotCatalogo;
+import catalogo.replica.domain.model.FiltroProfesionales;
+import catalogo.replica.domain.model.LecturaBusquedaProfesionales;
+import catalogo.replica.domain.model.LecturaCategorias;
+import catalogo.replica.infrastructure.persistence.entity.ProfesionalEntity;
 import catalogo.replica.application.exception.SnapshotCatalogoException;
 import catalogo.replica.application.exception.SnapshotCatalogoException.Error;
 import catalogo.replica.domain.ports.out.CatalogoRepository;
@@ -28,7 +34,7 @@ import catalogo.replica.infrastructure.persistence.repository.JpaEstadoCatalogoR
 import catalogo.replica.infrastructure.persistence.repository.JpaHorarioSemanalRepository;
 import catalogo.replica.infrastructure.persistence.repository.JpaProfesionalRepository;
 
-@Component
+@Repository
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class JpaCatalogoRepositoryAdapter implements CatalogoRepository {
@@ -124,5 +130,73 @@ public class JpaCatalogoRepositoryAdapter implements CatalogoRepository {
                                 .thenComparing(HorarioSemanal::getStartTime).thenComparing(HorarioSemanal::getId))
                         .toList();
         return LecturaProfesional.builder().estado(estado).profesional(profesional).horarios(agenda).build();
+    }
+
+    @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public LecturaCategorias listarCategorias() {
+        var estado = estados.findById(1L).map(estadoMapper::toDomainModel).orElse(null);
+        var contenido = estado == null ? List.<CategoriaProfesional>of()
+                : categorias.findAll().stream().map(categoriaMapper::toDomainModel)
+                        .sorted(Comparator.comparing(CategoriaProfesional::getName, String.CASE_INSENSITIVE_ORDER)
+                                .thenComparing(CategoriaProfesional::getId)).toList();
+        return LecturaCategorias.builder().estado(estado).categorias(contenido).build();
+    }
+
+    @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public LecturaBusquedaProfesionales buscarProfesionales(FiltroProfesionales filtro) {
+        var estado = estados.findById(1L).map(estadoMapper::toDomainModel).orElse(null);
+        boolean categoriaValida = estado != null
+                && (filtro.getCategoryId() == null || categorias.existsById(filtro.getCategoryId()));
+        var resultado = LecturaBusquedaProfesionales.builder().estado(estado).categoriaValida(categoriaValida)
+                .profesionales(List.of()).page(filtro.getPage()).size(filtro.getSize()).totalElements(0).build();
+        if (estado == null || !categoriaValida) return resultado;
+
+        var where = new StringBuilder(" FROM professional p WHERE 1=1");
+        var parametros = new HashMap<String, Object>();
+        if (filtro.getCategoryId() != null) {
+            where.append(" AND p.category_id = :categoria");
+            parametros.put("categoria", filtro.getCategoryId());
+        }
+        if (filtro.getEnabled() != null) {
+            where.append(" AND p.enabled = :habilitado");
+            parametros.put("habilitado", filtro.getEnabled());
+        }
+        if (filtro.getName() != null && !filtro.getName().isBlank()) {
+            where.append(" AND LOWER(p.first_name || ' ' || p.last_name) LIKE LOWER(:nombre) ESCAPE '!'");
+            String texto = filtro.getName().strip().replace("!", "!!").replace("%", "!%").replace("_", "!_");
+            parametros.put("nombre", "%" + texto + "%");
+        }
+        if (filtro.getDayOfWeek() != null) {
+            where.append("""
+                     AND p.enabled = true AND EXISTS (
+                         SELECT 1 FROM weekly_schedule s
+                         WHERE s.professional_id = p.id AND s.enabled = true AND s.day_of_week = :dia
+                         AND EXTRACT(EPOCH FROM (s.end_time - s.start_time)) >= s.slot_duration_minutes * 60
+                    """);
+            parametros.put("dia", filtro.getDayOfWeek().name());
+            if (filtro.getTime() != null) {
+                where.append("""
+                         AND CAST(:hora AS time) >= s.start_time
+                         AND EXTRACT(EPOCH FROM (s.end_time - CAST(:hora AS time))) >= s.slot_duration_minutes * 60
+                         AND MOD(EXTRACT(EPOCH FROM (CAST(:hora AS time) - s.start_time)), s.slot_duration_minutes * 60) = 0
+                        """);
+                parametros.put("hora", filtro.getTime());
+            }
+            where.append(")");
+        }
+        var session = entityManager.unwrap(Session.class);
+        var count = session.createNativeQuery("SELECT COUNT(*)" + where, Long.class);
+        var query = session.createNativeQuery("SELECT p.*" + where
+                + " ORDER BY LOWER(p.last_name), LOWER(p.first_name), p.id", ProfesionalEntity.class);
+        parametros.forEach((key, value) -> {
+            count.setParameter(key, value);
+            query.setParameter(key, value);
+        });
+        resultado.setTotalElements(count.getSingleResult());
+        resultado.setProfesionales(query.setFirstResult(Math.toIntExact((long) filtro.getPage() * filtro.getSize()))
+                .setMaxResults(filtro.getSize()).getResultList().stream().map(profesionalMapper::toDomainModel).toList());
+        return resultado;
     }
 }

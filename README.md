@@ -6,6 +6,7 @@ que reservas. CAT-01 prepara arranque, configuración, logs y salud. CAT-02 agre
 persistencia de categorías, profesionales, horarios y versión con Flyway.
 CAT-03 expone consultas locales protegidas con JWT RS256. CAT-04 consulta la
 integración técnica de cátedra y CAT-05 inicializa la copia mediante snapshot.
+CAT-08 agrega búsqueda local paginada y listado de categorías.
 
 ## Ejecutar
 
@@ -87,13 +88,43 @@ queda disponible internamente para esa recuperación.
 
 | Método | Ruta | Resultado |
 | --- | --- | --- |
+| GET | `/api/professionals` | Búsqueda local paginada con filtros combinables. |
+| GET | `/api/professional-categories` | Categorías con ID, nombre, habilitación y versión aplicada. |
 | GET | `/api/professionals/{id}` | Detalle del profesional, incluido su estado habilitado. |
 | GET | `/api/professionals/{id}/schedule` | Versión aplicada y horarios semanales habilitados. |
 
-Ambas requieren JWT Bearer. Usan únicamente la última versión aplicada localmente.
+Todas requieren JWT Bearer de usuario. Usan únicamente la última versión aplicada localmente.
 Sin una sincronización inicial responden `503 CATALOG_NOT_READY`. La agenda
 semanal no representa turnos libres: reservas combinará
-horarios, fecha y ocupaciones. La búsqueda con filtros corresponde a CAT-08.
+horarios, fecha y ocupaciones.
+
+### Búsqueda — CAT-08
+
+Ejemplo: `/api/professionals?categoryId=1&name=ana&enabled=true&dayOfWeek=MONDAY&time=09:30&page=0&size=20`.
+Todos los filtros son opcionales y se combinan por AND:
+
+- `categoryId`: ID positivo existente; categoría inexistente devuelve `400 INVALID_CATEGORY`.
+- `name`: coincidencia parcial sobre nombre, apellido o nombre completo, sin
+  distinguir mayúsculas; se recortan espacios extremos. Máximo 100 caracteres,
+  con tildes significativas y `%`/`_` literales.
+- `enabled`: estado del profesional. Omitido incluye habilitados y deshabilitados.
+- `dayOfWeek`: día ISO de `MONDAY` a `SUNDAY`, con al menos un turno completo en
+  una franja habilitada de un profesional habilitado.
+- `time`: inicio potencial, alineado a la duración desde el inicio de la franja
+  y con final dentro de ella. Requiere `dayOfWeek`. No verifica ocupaciones.
+- `page`: desde cero; `size`: entre 1 y 100, por defecto 20. Orden fijo por
+  apellido, nombre e ID. Páginas o combinaciones sin coincidencias devuelven lista vacía.
+
+Respuesta: `{versionAplicada, content, page, size, totalElements}`; cada elemento
+usa el mismo formato del detalle de profesional. Sin día no se exige tener agenda;
+`enabled=false` combinado con día devuelve vacío. Parámetros malformados devuelven
+`400 INVALID_REQUEST`. El listado de categorías devuelve `{versionAplicada, content}`,
+ordenado por nombre e ID, incluyendo categorías deshabilitadas para informar su estado.
+Los IDs del selector se obtienen de este listado, sin hardcodearlos.
+
+Cada respuesta lee sus datos y versión en una transacción consistente. Si cambia
+el catálogo entre dos peticiones, sus versiones pueden diferir. Una caída de la
+base devuelve `503 CATALOG_UNAVAILABLE`, sin simular un resultado vacío.
 
 ## Verificar
 

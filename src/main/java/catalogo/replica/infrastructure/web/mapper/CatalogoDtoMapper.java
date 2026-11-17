@@ -7,9 +7,29 @@ import catalogo.replica.domain.model.Profesional;
 import catalogo.replica.infrastructure.web.dto.AgendaProfesionalResponse;
 import catalogo.replica.infrastructure.web.dto.HorarioSemanalResponse;
 import catalogo.replica.infrastructure.web.dto.ProfesionalResponse;
+import catalogo.replica.domain.model.LecturaBusquedaProfesionales;
+import catalogo.replica.domain.model.LecturaCategorias;
+import catalogo.replica.infrastructure.web.dto.BusquedaProfesionalesResponse;
+import catalogo.replica.infrastructure.web.dto.CategoriasResponse;
+import catalogo.replica.infrastructure.web.dto.CategoriaProfesionalResponse;
 
 @Component
 public class CatalogoDtoMapper {
+    public BusquedaProfesionalesResponse toResponse(LecturaBusquedaProfesionales lectura) {
+        if (lectura == null) return null;
+        return BusquedaProfesionalesResponse.builder().versionAplicada(lectura.getEstado().getVersionAplicada())
+                .content(lectura.getProfesionales().stream().map(this::toResponse).toList())
+                .page(lectura.getPage()).size(lectura.getSize()).totalElements(lectura.getTotalElements()).build();
+    }
+
+    public CategoriasResponse toResponse(LecturaCategorias lectura) {
+        if (lectura == null) return null;
+        return CategoriasResponse.builder().versionAplicada(lectura.getEstado().getVersionAplicada())
+                .content(lectura.getCategorias().stream().map(categoria -> CategoriaProfesionalResponse.builder()
+                        .id(categoria.getId()).name(categoria.getName()).enabled(categoria.getEnabled()).build()).toList())
+                .build();
+    }
+
     public ProfesionalResponse toResponse(Profesional profesional) {
         if (profesional == null) {
             return null;
