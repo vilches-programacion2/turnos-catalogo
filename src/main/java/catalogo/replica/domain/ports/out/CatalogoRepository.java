@@ -7,6 +7,9 @@ import catalogo.replica.domain.model.HorarioSemanal;
 import catalogo.replica.domain.model.LecturaProfesional;
 import catalogo.replica.domain.model.Profesional;
 import catalogo.replica.domain.model.SnapshotCatalogo;
+import catalogo.replica.domain.model.FiltroProfesionales;
+import catalogo.replica.domain.model.LecturaBusquedaProfesionales;
+import catalogo.replica.domain.model.LecturaCategorias;
 
 public interface CatalogoRepository {
     CategoriaProfesional guardarCategoria(CategoriaProfesional categoria);
@@ -19,4 +22,6 @@ public interface CatalogoRepository {
     EstadoCatalogo guardarEstado(EstadoCatalogo estado);
     LecturaProfesional leerProfesional(Long id);
     EstadoCatalogo reemplazarSnapshot(SnapshotCatalogo snapshot);
+    LecturaBusquedaProfesionales buscarProfesionales(FiltroProfesionales filtro);
+    LecturaCategorias listarCategorias();
 }

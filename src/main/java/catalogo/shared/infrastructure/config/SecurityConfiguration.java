@@ -25,7 +25,7 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/liveness",
                                 "/actuator/health/readiness").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/professionals/{id}",
+                        .requestMatchers(HttpMethod.GET, "/api/professionals", "/api/professional-categories", "/api/professionals/{id}",
                                 "/api/professionals/{id}/schedule").hasRole("USER")
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(authentication)))

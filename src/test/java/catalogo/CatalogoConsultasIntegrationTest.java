@@ -151,14 +151,14 @@ class CatalogoConsultasIntegrationTest {
     }
 
     @Test
-    void noHabilitaEscriturasNiListadosTodavia() throws Exception {
+    void noHabilitaEscriturasNiEndpointsAjenosAlCatalogo() throws Exception {
         var profesional = profesional(true);
         inicializar(1L);
         String token = JwtTestKeys.token();
         var post = HttpRequest.newBuilder(uri(path(profesional))).header("Authorization", "Bearer " + token)
                 .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString("{}"));
         assertThat(client.send(post.build(), HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(403);
-        assertThat(get("/api/professionals", token).statusCode()).isEqualTo(403);
+        assertThat(get("/api/professionals", token).statusCode()).isEqualTo(200);
         assertThat(get("/actuator/env", token).statusCode()).isEqualTo(403);
         assertThat(get("/api/authenticate", token).statusCode()).isEqualTo(403);
         assertThat(get("/api/student/integration", token).statusCode()).isEqualTo(403);
