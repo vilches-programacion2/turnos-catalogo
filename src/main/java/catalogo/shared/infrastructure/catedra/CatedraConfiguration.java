@@ -1,4 +1,4 @@
-package catalogo.integracion.infrastructure.config;
+package catalogo.shared.infrastructure.catedra;
 
 import java.net.http.HttpClient;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

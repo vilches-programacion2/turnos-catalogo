@@ -3,6 +3,9 @@ package catalogo.replica.infrastructure.persistence.adapter;
 import java.util.Optional;
 import java.util.List;
 import java.util.Comparator;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +15,9 @@ import catalogo.replica.domain.model.EstadoCatalogo;
 import catalogo.replica.domain.model.HorarioSemanal;
 import catalogo.replica.domain.model.LecturaProfesional;
 import catalogo.replica.domain.model.Profesional;
+import catalogo.replica.domain.model.SnapshotCatalogo;
+import catalogo.replica.application.exception.SnapshotCatalogoException;
+import catalogo.replica.application.exception.SnapshotCatalogoException.Error;
 import catalogo.replica.domain.ports.out.CatalogoRepository;
 import catalogo.replica.infrastructure.persistence.mapper.CategoriaProfesionalMapper;
 import catalogo.replica.infrastructure.persistence.mapper.EstadoCatalogoMapper;
@@ -34,6 +40,7 @@ public class JpaCatalogoRepositoryAdapter implements CatalogoRepository {
     private final ProfesionalMapper profesionalMapper;
     private final HorarioSemanalMapper horarioMapper;
     private final EstadoCatalogoMapper estadoMapper;
+    private final EntityManager entityManager;
 
     @Override
     @Transactional
@@ -76,6 +83,29 @@ public class JpaCatalogoRepositoryAdapter implements CatalogoRepository {
     @Override
     @Transactional
     public EstadoCatalogo guardarEstado(EstadoCatalogo estado) {
+        return estadoMapper.toDomainModel(estados.saveAndFlush(estadoMapper.toEntity(estado)));
+    }
+
+    @Override
+    @Transactional
+    public EstadoCatalogo reemplazarSnapshot(SnapshotCatalogo snapshot) {
+        // Serializa reemplazos incluso cuando todavía no existe la fila de checkpoint.
+        // Los escritores incrementales deberán tomar este mismo bloqueo antes de escribir.
+        entityManager.createNativeQuery("LOCK TABLE catalog_state IN SHARE ROW EXCLUSIVE MODE").executeUpdate();
+        entityManager.clear();
+        var actual = estados.findById(1L);
+        if (actual.isPresent() && actual.get().getVersionAplicada() > snapshot.getSnapshotVersion()) {
+            throw new SnapshotCatalogoException(Error.VERSION_OBSOLETA);
+        }
+        horarios.deleteAllInBatch();
+        profesionales.deleteAllInBatch();
+        categorias.deleteAllInBatch();
+        entityManager.clear();
+        categorias.saveAllAndFlush(snapshot.getProfessionalCategories().stream().map(categoriaMapper::toEntity).toList());
+        profesionales.saveAllAndFlush(snapshot.getProfessionals().stream().map(profesionalMapper::toEntity).toList());
+        horarios.saveAllAndFlush(snapshot.getWeeklySchedules().stream().map(horarioMapper::toEntity).toList());
+        var estado = EstadoCatalogo.builder().versionAplicada(snapshot.getSnapshotVersion())
+                .actualizadoEn(Instant.now().truncatedTo(ChronoUnit.MICROS)).build();
         return estadoMapper.toDomainModel(estados.saveAndFlush(estadoMapper.toEntity(estado)));
     }
 

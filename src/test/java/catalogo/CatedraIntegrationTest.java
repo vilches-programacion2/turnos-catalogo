@@ -28,8 +28,9 @@ import catalogo.integracion.application.usecases.ObtenerIntegracionCatedraUseCas
 import catalogo.integracion.domain.model.EstadoProvisionamiento;
 import catalogo.integracion.infrastructure.client.adapter.CatedraHttpAdapter;
 import catalogo.integracion.infrastructure.client.mapper.IntegracionCatedraMapper;
-import catalogo.integracion.infrastructure.config.CatedraConfiguration;
-import catalogo.integracion.infrastructure.config.CatedraProperties;
+import catalogo.shared.infrastructure.catedra.CatedraConfiguration;
+import catalogo.shared.infrastructure.catedra.CatedraTokenFile;
+import catalogo.shared.infrastructure.catedra.CatedraProperties;
 import catalogo.integracion.infrastructure.config.CatedraStartupCheck;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,7 +71,7 @@ class CatedraIntegrationTest {
         Files.writeString(properties.getTokenFile(), TOKEN + "\n");
         var builder = RestClient.builder().baseUrl(BASE);
         server = MockRestServiceServer.bindTo(builder).build();
-        var adapter = new CatedraHttpAdapter(builder.build(), properties, new IntegracionCatedraMapper());
+        var adapter = new CatedraHttpAdapter(builder.build(), new CatedraTokenFile(properties), new IntegracionCatedraMapper());
         service = new IntegracionCatedraService(new ObtenerIntegracionCatedraUseCaseImpl(adapter));
     }
 

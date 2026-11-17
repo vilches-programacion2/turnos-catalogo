@@ -1,8 +1,6 @@
 package catalogo.integracion.infrastructure.client.adapter;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -14,15 +12,13 @@ import catalogo.integracion.domain.model.IntegracionCatedra;
 import catalogo.integracion.domain.ports.out.CatedraClient;
 import catalogo.integracion.infrastructure.client.dto.IntegracionCatedraResponse;
 import catalogo.integracion.infrastructure.client.mapper.IntegracionCatedraMapper;
-import catalogo.integracion.infrastructure.config.CatedraProperties;
+import catalogo.shared.infrastructure.catedra.CatedraTokenFile;
 
 @Component
 @RequiredArgsConstructor
 public class CatedraHttpAdapter implements CatedraClient {
-    private static final int MAX_TOKEN_BYTES = 16384;
-
     private final RestClient catedraRestClient;
-    private final CatedraProperties properties;
+    private final CatedraTokenFile tokenFile;
     private final IntegracionCatedraMapper mapper;
 
     @Override
@@ -49,17 +45,8 @@ public class CatedraHttpAdapter implements CatedraClient {
     }
 
     private String leerToken() {
-        if (!properties.isEnabled() || properties.getTokenFile() == null
-                || !Files.isRegularFile(properties.getTokenFile())) {
-            throw new IntegracionCatedraException(Error.CONFIGURACION_INVALIDA);
-        }
-        try (var input = Files.newInputStream(properties.getTokenFile())) {
-            byte[] bytes = input.readNBytes(MAX_TOKEN_BYTES + 1);
-            String token = new String(bytes, StandardCharsets.UTF_8).strip();
-            if (bytes.length > MAX_TOKEN_BYTES || !token.matches("[A-Za-z0-9._~+/=-]+")) {
-                throw new IntegracionCatedraException(Error.CONFIGURACION_INVALIDA);
-            }
-            return token;
+        try {
+            return tokenFile.leer();
         } catch (IOException e) {
             throw new IntegracionCatedraException(Error.CONFIGURACION_INVALIDA);
         }
