@@ -1,4 +1,4 @@
-package catalogo.integracion.infrastructure.config;
+package catalogo.shared.infrastructure.catedra;
 
 import java.net.URI;
 import java.nio.file.Path;

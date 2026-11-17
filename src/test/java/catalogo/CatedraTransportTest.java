@@ -19,7 +19,8 @@ import catalogo.integracion.application.usecases.ObtenerIntegracionCatedraUseCas
 import catalogo.integracion.domain.model.EstadoProvisionamiento;
 import catalogo.integracion.infrastructure.client.adapter.CatedraHttpAdapter;
 import catalogo.integracion.infrastructure.client.mapper.IntegracionCatedraMapper;
-import catalogo.integracion.infrastructure.config.CatedraConfiguration;
+import catalogo.shared.infrastructure.catedra.CatedraConfiguration;
+import catalogo.shared.infrastructure.catedra.CatedraTokenFile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -94,7 +95,7 @@ class CatedraTransportTest {
         context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("test", Map.of(
                 "app.catedra.enabled", "true", "app.catedra.base-url", url,
                 "app.catedra.token-file", token.toString(), "app.catedra.read-timeout", timeout)));
-        context.register(CatedraConfiguration.class, CatedraHttpAdapter.class, IntegracionCatedraMapper.class,
+        context.register(CatedraConfiguration.class, CatedraTokenFile.class, CatedraHttpAdapter.class, IntegracionCatedraMapper.class,
                 ObtenerIntegracionCatedraUseCaseImpl.class, IntegracionCatedraService.class);
         context.refresh();
         return context;

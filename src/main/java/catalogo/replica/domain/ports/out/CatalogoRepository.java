@@ -6,6 +6,7 @@ import catalogo.replica.domain.model.EstadoCatalogo;
 import catalogo.replica.domain.model.HorarioSemanal;
 import catalogo.replica.domain.model.LecturaProfesional;
 import catalogo.replica.domain.model.Profesional;
+import catalogo.replica.domain.model.SnapshotCatalogo;
 
 public interface CatalogoRepository {
     CategoriaProfesional guardarCategoria(CategoriaProfesional categoria);
@@ -17,4 +18,5 @@ public interface CatalogoRepository {
     Optional<EstadoCatalogo> obtenerEstado();
     EstadoCatalogo guardarEstado(EstadoCatalogo estado);
     LecturaProfesional leerProfesional(Long id);
+    EstadoCatalogo reemplazarSnapshot(SnapshotCatalogo snapshot);
 }
