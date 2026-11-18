@@ -32,6 +32,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import catalogo.replica.domain.ports.in.RecuperarCatalogoUseCase;
+import catalogo.replica.domain.ports.out.SnapshotCatalogoClient;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -52,6 +55,7 @@ import catalogo.replica.infrastructure.redis.RedisCambiosCatalogoAdapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.*;
 
 @Testcontainers
 @ExtendWith(OutputCaptureExtension.class)
@@ -71,6 +75,8 @@ class IncrementalCatalogoIntegrationTest {
         registry.add("spring.datasource.password", DATABASE::getPassword);
     }
 
+    @MockitoBean private SnapshotCatalogoClient snapshots;
+    @Autowired private RecuperarCatalogoUseCase recuperacion;
     @Autowired private CatalogoRepository catalogo;
     @Autowired private CatalogoService service;
     @Autowired private RedisCambiosCatalogoAdapter adapter;
@@ -306,6 +312,60 @@ class IncrementalCatalogoIntegrationTest {
             await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> assertThat(offset(group, topic)).isEqualTo(1));
             assertThat(catalogo.buscarEventoProcesado("recuperable-8")).contains(8L);
         }
+    }
+
+    @Test
+    void recuperaVersionesRetenidasAunqueNoLlegueKafka() {
+        metadata(9, 0);
+        cambioProfesional(8, false);
+        redis.set("catedra:sync:changes:9", cambioJson(9, "[]", "[]", "[]"));
+
+        assertThat(recuperacion.recuperar().getVersionAplicada()).isEqualTo(9);
+        assertThat(catalogo.buscarProfesional(15L).orElseThrow().getEnabled()).isFalse();
+        assertThat(catalogo.buscarProfesional(115L)).isPresent();
+        verifyNoInteractions(snapshots);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ventana-vencida", "cambio-ausente", "entidad-invalida"})
+    void reconstruyeSoloElCatalogoAnteUnaDiscontinuidad(String caso) {
+        metadata(9, caso.equals("ventana-vencida") ? 8 : 0);
+        cambioProfesional(8, false);
+        if (caso.equals("entidad-invalida")) {
+            redis.hdel("catedra:sync:professionals", "15");
+        }
+        when(snapshots.descargar()).thenReturn(SnapshotTestData.snapshot(9, 200));
+
+        assertThat(recuperacion.recuperar().getVersionAplicada()).isEqualTo(9);
+        assertThat(catalogo.buscarProfesional(15L)).isEmpty();
+        assertThat(catalogo.buscarProfesional(215L)).isPresent();
+        assertThat(recuperacion.recuperar().getVersionAplicada()).isEqualTo(9);
+        verify(snapshots).descargar();
+    }
+
+    @Test
+    void snapshotAtrasadoConservaLaCopiaYElSiguienteCicloPuedeRecuperarla() {
+        metadata(9, 8);
+        when(snapshots.descargar()).thenReturn(SnapshotTestData.snapshot(8, 200), SnapshotTestData.snapshot(9, 200));
+
+        assertThatThrownBy(recuperacion::recuperar)
+                .isInstanceOfSatisfying(IncrementalCatalogoException.class,
+                        e -> assertThat(e.getError()).isEqualTo(Error.VERSION_NO_PUBLICADA));
+        assertThat(catalogo.obtenerEstado().orElseThrow().getVersionAplicada()).isEqualTo(7);
+        assertThat(catalogo.buscarProfesional(15L)).isPresent();
+
+        assertThat(recuperacion.recuperar().getVersionAplicada()).isEqualTo(9);
+        verify(snapshots, times(2)).descargar();
+    }
+
+    @Test
+    void caidaTemporalDeRedisConservaLaCopiaSinForzarSnapshot() {
+        adapter.cerrar();
+        assertThatThrownBy(recuperacion::recuperar)
+                .isInstanceOfSatisfying(IncrementalCatalogoException.class,
+                        e -> assertThat(e.getError()).isEqualTo(Error.REDIS_NO_DISPONIBLE));
+        assertThat(catalogo.obtenerEstado().orElseThrow().getVersionAplicada()).isEqualTo(7);
+        verifyNoInteractions(snapshots);
     }
 
     private void metadata(long current, long oldest) {

@@ -78,11 +78,9 @@ El reemplazo de categorías, profesionales y horarios y la actualización de
 estado anterior. Se serializan los reemplazos y se rechaza una versión inferior
 a la aplicada; una versión igual puede reaplicarse para reconstruir la copia.
 
-Al reiniciar con checkpoint existente se conserva la copia, sin descargar todo
-otra vez. Si falla el primer intento, las consultas siguen respondiendo
-`CATALOG_NOT_READY`; corregir el acceso y reiniciar vuelve a intentar la carga.
-No hay endpoint manual nuevo ni sincronización periódica. La recuperación
-automática corresponde a CAT-07; el reemplazo queda disponible internamente.
+Al reiniciar con checkpoint existente se conserva la copia y se comprueba
+qué versiones faltan. Si falla la primera carga, las consultas responden
+`CATALOG_NOT_READY` hasta que se aplique un snapshot válido.
 
 ## Sincronización incremental — CAT-06
 
@@ -102,11 +100,26 @@ El offset Kafka se confirma después de persistir; no hay auto-commit. Una
 notificación duplicada o atrasada no retrocede el catálogo. No se descarga un
 snapshot por evento ni se lee todo el hash de entidades.
 
-Si falta historial o una entidad, falla Redis o no se puede persistir, el
-consumidor se detiene sin confirmar el mensaje y conserva el último checkpoint
-válido. En CAT-06 se corrige el problema y se reinicia; CAT-07 incorporará
-recuperación automática y snapshot cuando corresponda. Las consultas siguen
-usando la última copia local disponible; un fallo no simula una actualización.
+Si falla el procesamiento de un mensaje, el consumidor se detiene y conserva
+el último checkpoint válido. El mensaje queda pendiente para su reentrega.
+
+## Recuperación de la sincronización — CAT-07
+
+Con la integración y el consumo habilitados, Catálogo verifica la versión en
+Redis al arrancar y luego cada 60 segundos desde el fin de la última revisión.
+El intervalo se configura con `CATEDRA_SYNC_RECOVERY_INTERVAL`. Esto también
+detecta atrasos cuando se pierde una notificación Kafka.
+
+Si Redis conserva los cambios pendientes, Catálogo se pone al día por
+incrementos. Si la ventana expiró o un cambio falta o es inconsistente, solicita
+un snapshot REST del catálogo como máximo una vez en ese ciclo. Solo lo aplica
+si pasa la validación y alcanza la versión publicada observada. Las consultas
+siguen usando el último checkpoint válido durante una caída de infraestructura.
+
+Cuando el consumidor está detenido, cada ciclo intenta reconectar con la
+integración asignada y recuperar el catálogo antes de reanudar Kafka. Los
+mensajes pendientes se reentregan y se confirman según el checkpoint y la
+deduplicación existentes.
 
 Los timeouts por defecto son 3s para conexión Redis, 5s para comandos, 5s para
 solicitudes Kafka y 10s para operaciones Kafka. Variables en [.env.example](.env.example).
