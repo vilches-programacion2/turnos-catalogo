@@ -10,6 +10,7 @@ import catalogo.replica.domain.model.SnapshotCatalogo;
 import catalogo.replica.domain.model.FiltroProfesionales;
 import catalogo.replica.domain.model.LecturaBusquedaProfesionales;
 import catalogo.replica.domain.model.LecturaCategorias;
+import catalogo.replica.domain.model.CambioCatalogo;
 
 public interface CatalogoRepository {
     CategoriaProfesional guardarCategoria(CategoriaProfesional categoria);
@@ -24,4 +25,7 @@ public interface CatalogoRepository {
     EstadoCatalogo reemplazarSnapshot(SnapshotCatalogo snapshot);
     LecturaBusquedaProfesionales buscarProfesionales(FiltroProfesionales filtro);
     LecturaCategorias listarCategorias();
+    Optional<Long> buscarEventoProcesado(String eventId);
+    EstadoCatalogo aplicarCambio(long versionAnterior, CambioCatalogo cambio);
+    EstadoCatalogo registrarEventoProcesado(String eventId, long nuevaVersion);
 }

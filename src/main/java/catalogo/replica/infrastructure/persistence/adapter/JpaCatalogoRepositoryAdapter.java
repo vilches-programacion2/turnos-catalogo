@@ -21,6 +21,9 @@ import catalogo.replica.domain.model.SnapshotCatalogo;
 import catalogo.replica.domain.model.FiltroProfesionales;
 import catalogo.replica.domain.model.LecturaBusquedaProfesionales;
 import catalogo.replica.domain.model.LecturaCategorias;
+import catalogo.replica.domain.model.CambioCatalogo;
+import catalogo.replica.application.exception.CatalogoNoInicializadoException;
+import catalogo.replica.application.exception.IncrementalCatalogoException;
 import catalogo.replica.infrastructure.persistence.entity.ProfesionalEntity;
 import catalogo.replica.application.exception.SnapshotCatalogoException;
 import catalogo.replica.application.exception.SnapshotCatalogoException.Error;
@@ -93,12 +96,58 @@ public class JpaCatalogoRepositoryAdapter implements CatalogoRepository {
     }
 
     @Override
+    public Optional<Long> buscarEventoProcesado(String eventId) {
+        return entityManager.unwrap(Session.class).createNativeQuery(
+                "SELECT notified_version FROM catalog_processed_event WHERE event_id = :id", Long.class)
+                .setParameter("id", eventId).getResultStream().findFirst();
+    }
+
+    @Override
+    @Transactional
+    public EstadoCatalogo aplicarCambio(long versionAnterior, CambioCatalogo cambio) {
+        bloquearEstado();
+        var actual = estados.findById(1L).orElseThrow(CatalogoNoInicializadoException::new);
+        if (actual.getVersionAplicada() >= cambio.getVersion()) return estadoMapper.toDomainModel(actual);
+        if (actual.getVersionAplicada() != versionAnterior || cambio.getVersion() != versionAnterior + 1) {
+            throw new IncrementalCatalogoException(IncrementalCatalogoException.Error.VERSION_CONFLICTIVA);
+        }
+        categorias.saveAllAndFlush(cambio.getCategorias().stream().map(categoriaMapper::toEntity).toList());
+        profesionales.saveAllAndFlush(cambio.getProfesionales().stream().map(profesionalMapper::toEntity).toList());
+        horarios.saveAllAndFlush(cambio.getHorarios().stream().map(horarioMapper::toEntity).toList());
+        actual.setVersionAplicada(cambio.getVersion());
+        actual.setActualizadoEn(Instant.now().truncatedTo(ChronoUnit.MICROS));
+        return estadoMapper.toDomainModel(estados.saveAndFlush(actual));
+    }
+
+    @Override
+    @Transactional
+    public EstadoCatalogo registrarEventoProcesado(String eventId, long nuevaVersion) {
+        bloquearEstado();
+        var actual = estados.findById(1L).orElseThrow(CatalogoNoInicializadoException::new);
+        if (actual.getVersionAplicada() < nuevaVersion) {
+            throw new IncrementalCatalogoException(IncrementalCatalogoException.Error.VERSION_CONFLICTIVA);
+        }
+        entityManager.createNativeQuery("""
+                INSERT INTO catalog_processed_event (event_id, notified_version, processed_at)
+                VALUES (:id, :version, CURRENT_TIMESTAMP) ON CONFLICT (event_id) DO NOTHING
+                """).setParameter("id", eventId).setParameter("version", nuevaVersion).executeUpdate();
+        if (buscarEventoProcesado(eventId).orElseThrow() != nuevaVersion) {
+            throw new IncrementalCatalogoException(IncrementalCatalogoException.Error.EVENTO_CONFLICTIVO);
+        }
+        return estadoMapper.toDomainModel(actual);
+    }
+
+    private void bloquearEstado() {
+        entityManager.createNativeQuery("LOCK TABLE catalog_state IN SHARE ROW EXCLUSIVE MODE").executeUpdate();
+        entityManager.clear();
+    }
+
+    @Override
     @Transactional
     public EstadoCatalogo reemplazarSnapshot(SnapshotCatalogo snapshot) {
         // Serializa reemplazos incluso cuando todavía no existe la fila de checkpoint.
         // Los escritores incrementales deberán tomar este mismo bloqueo antes de escribir.
-        entityManager.createNativeQuery("LOCK TABLE catalog_state IN SHARE ROW EXCLUSIVE MODE").executeUpdate();
-        entityManager.clear();
+        bloquearEstado();
         var actual = estados.findById(1L);
         if (actual.isPresent() && actual.get().getVersionAplicada() > snapshot.getSnapshotVersion()) {
             throw new SnapshotCatalogoException(Error.VERSION_OBSOLETA);

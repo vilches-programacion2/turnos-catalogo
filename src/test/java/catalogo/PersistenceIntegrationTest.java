@@ -60,11 +60,11 @@ class PersistenceIntegrationTest {
 
     @Test
     void migraSoloTablasPropiasYSinInventarUnaVersionInicial() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
-        assertThat(flyway.info().applied()).hasSize(1);
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
+        assertThat(flyway.info().applied()).hasSize(2);
         assertThat(jdbc.queryForList("SELECT tablename FROM pg_tables WHERE schemaname = 'public'", String.class))
                 .containsExactlyInAnyOrder("professional_category", "professional", "weekly_schedule",
-                        "catalog_state", "flyway_schema_history");
+                        "catalog_state", "catalog_processed_event", "flyway_schema_history");
         assertThat(catalogo.obtenerEstado()).isEmpty();
         assertThat(catalogo.buscarCategoria(Long.MAX_VALUE)).isEmpty();
         assertThat(catalogo.buscarProfesional(Long.MAX_VALUE)).isEmpty();
@@ -235,7 +235,7 @@ class PersistenceIntegrationTest {
             assertThat(reabierto.buscarHorario(horario.getId()).orElseThrow())
                     .usingRecursiveComparison().isEqualTo(horario);
             assertThat(reabierto.obtenerEstado().orElseThrow()).usingRecursiveComparison().isEqualTo(estado);
-            assertThat(context.getBean(Flyway.class).info().applied()).hasSize(1);
+            assertThat(context.getBean(Flyway.class).info().applied()).hasSize(2);
         }
     }
 

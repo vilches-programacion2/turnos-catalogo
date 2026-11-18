@@ -23,21 +23,21 @@ public class SnapshotCatalogoMapper {
                 .weeklySchedules(mapear(response.getWeeklySchedules(), this::toDomain)).build();
     }
 
-    private CategoriaProfesional toDomain(CategoriaProfesionalSnapshotResponse response) {
+    public CategoriaProfesional toDomain(CategoriaProfesionalSnapshotResponse response) {
         if (response == null) return null;
         return CategoriaProfesional.builder().id(response.getId()).name(response.getName())
                 .description(response.getDescription()).enabled(response.getEnabled())
                 .createdAt(response.getCreatedAt()).updatedAt(response.getUpdatedAt()).build();
     }
 
-    private Profesional toDomain(ProfesionalSnapshotResponse response) {
+    public Profesional toDomain(ProfesionalSnapshotResponse response) {
         if (response == null) return null;
         return Profesional.builder().id(response.getId()).categoryId(response.getCategoryId())
                 .firstName(response.getFirstName()).lastName(response.getLastName()).enabled(response.getEnabled())
                 .createdAt(response.getCreatedAt()).updatedAt(response.getUpdatedAt()).build();
     }
 
-    private HorarioSemanal toDomain(HorarioSemanalSnapshotResponse response) {
+    public HorarioSemanal toDomain(HorarioSemanalSnapshotResponse response) {
         if (response == null) return null;
         return HorarioSemanal.builder().id(response.getId()).professionalId(response.getProfessionalId())
                 .dayOfWeek(response.getDayOfWeek()).startTime(response.getStartTime()).endTime(response.getEndTime())

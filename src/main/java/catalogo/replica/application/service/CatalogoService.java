@@ -12,6 +12,7 @@ import catalogo.replica.domain.ports.in.InicializarCatalogoUseCase;
 import catalogo.replica.domain.ports.in.SincronizarCatalogoUseCase;
 import catalogo.replica.domain.ports.in.BuscarProfesionalesUseCase;
 import catalogo.replica.domain.ports.in.ListarCategoriasUseCase;
+import catalogo.replica.domain.ports.in.ActualizarCatalogoUseCase;
 import catalogo.replica.domain.model.FiltroProfesionales;
 import catalogo.replica.domain.model.LecturaBusquedaProfesionales;
 import catalogo.replica.domain.model.LecturaCategorias;
@@ -25,6 +26,11 @@ public class CatalogoService {
     private final SincronizarCatalogoUseCase sincronizarCatalogo;
     private final BuscarProfesionalesUseCase buscarProfesionales;
     private final ListarCategoriasUseCase listarCategorias;
+    private final ActualizarCatalogoUseCase actualizarCatalogo;
+
+    public EstadoCatalogo actualizar(String eventId, Long nuevaVersion) {
+        return actualizarCatalogo.actualizar(eventId, nuevaVersion);
+    }
 
     public LecturaBusquedaProfesionales buscar(FiltroProfesionales filtro) {
         return buscarProfesionales.buscar(filtro);
