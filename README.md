@@ -7,6 +7,7 @@ persistencia de categorías, profesionales, horarios y versión con Flyway.
 CAT-03 expone consultas locales protegidas con JWT RS256. CAT-04 consulta la
 integración técnica de cátedra y CAT-05 inicializa la copia mediante snapshot.
 CAT-08 agrega búsqueda local paginada y listado de categorías.
+CAT-06 aplica cambios incrementales notificados por Kafka y leídos desde Redis.
 
 ## Ejecutar
 
@@ -52,7 +53,7 @@ Este JWT es independiente del de usuarios y nunca se entrega a Android.
 Con la integración habilitada, al arrancar se consulta
 `GET /api/student/integration` con Bearer. Se conservan los nombres y credenciales
 asignados por cátedra, sin inventar topics ni namespaces. `PENDING`, `FAILED` y
-`REVOKED` no habilitan Redis/Kafka; sus clientes corresponden a CAT-06.
+`REVOKED` no habilitan Redis/Kafka.
 Los logs muestran solo estado o categoría de error, sin cuerpos ni secretos.
 Un fallo externo no impide consultar la copia local disponible. Sin habilitar
 la integración, el servicio funciona localmente y no contacta a cátedra.
@@ -80,9 +81,37 @@ a la aplicada; una versión igual puede reaplicarse para reconstruir la copia.
 Al reiniciar con checkpoint existente se conserva la copia, sin descargar todo
 otra vez. Si falla el primer intento, las consultas siguen respondiendo
 `CATALOG_NOT_READY`; corregir el acceso y reiniciar vuelve a intentar la carga.
-No hay endpoint manual nuevo ni sincronización periódica. Los incrementos y la
-recuperación automática corresponden a CAT-06/CAT-07. El caso de uso de reemplazo
-queda disponible internamente para esa recuperación.
+No hay endpoint manual nuevo ni sincronización periódica. La recuperación
+automática corresponde a CAT-07; el reemplazo queda disponible internamente.
+
+## Sincronización incremental — CAT-06
+
+Con integración `PROVISIONED`, checkpoint existente y `CATEDRA_SYNC_ENABLED=true`,
+se conecta Lettuce a Redis y se inicia Spring Kafka sobre el topic y consumer
+group asignados. Las credenciales se obtienen de la integración técnica;
+no se configuran cuentas adicionales ni se crean topics de cátedra.
+
+`CatalogUpdated` notifica una versión. Se lee la metadata y, en orden, únicamente
+los cambios posteriores al checkpoint y los IDs afectados de sus hashes. Se
+aplican altas, modificaciones y bajas lógicas (`enabled=false`), conservando
+las filas no afectadas. Cada versión y su checkpoint se guardan en una transacción.
+Los hashes contienen el estado vigente de las entidades, no versiones históricas.
+
+Los `eventId` procesados se guardan en PostgreSQL para deduplicar reentregas.
+El offset Kafka se confirma después de persistir; no hay auto-commit. Una
+notificación duplicada o atrasada no retrocede el catálogo. No se descarga un
+snapshot por evento ni se lee todo el hash de entidades.
+
+Si falta historial o una entidad, falla Redis o no se puede persistir, el
+consumidor se detiene sin confirmar el mensaje y conserva el último checkpoint
+válido. En CAT-06 se corrige el problema y se reinicia; CAT-07 incorporará
+recuperación automática y snapshot cuando corresponda. Las consultas siguen
+usando la última copia local disponible; un fallo no simula una actualización.
+
+Los timeouts por defecto son 3s para conexión Redis, 5s para comandos, 5s para
+solicitudes Kafka y 10s para operaciones Kafka. Variables en [.env.example](.env.example).
+En el Compose integral de Reservas se usan estos valores predeterminados; para
+personalizarlos allí hay que pasarlos al entorno del servicio Catálogo.
 
 ## Consultas
 

@@ -7,11 +7,13 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
+import org.springframework.core.annotation.Order;
 import catalogo.replica.application.exception.SnapshotCatalogoException;
 import catalogo.replica.application.service.CatalogoService;
 
 @Slf4j
 @Component
+@Order(0)
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "app.catedra", name = "enabled", havingValue = "true")
 public class SnapshotCatalogoInitializer implements ApplicationRunner {
