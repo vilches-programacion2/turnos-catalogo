@@ -2,7 +2,6 @@ package catalogo.replica.infrastructure.kafka;
 
 import java.time.Duration;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,6 +12,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.util.TestPropertyValues;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.kafka.listener.KafkaMessageListenerContainer;
@@ -24,8 +25,7 @@ import catalogo.integracion.domain.ports.in.ObtenerIntegracionCatedraUseCase;
 import catalogo.replica.application.exception.IncrementalCatalogoException;
 import catalogo.replica.application.exception.IncrementalCatalogoException.Error;
 import catalogo.replica.application.service.CatalogoService;
-import catalogo.replica.domain.model.EstadoCatalogo;
-import catalogo.replica.domain.ports.out.CatalogoRepository;
+import catalogo.replica.domain.ports.in.RecuperarCatalogoUseCase;
 import catalogo.replica.infrastructure.config.IncrementalCatalogoInitializer;
 import catalogo.replica.infrastructure.config.SincronizacionProperties;
 import catalogo.replica.infrastructure.redis.RedisCambiosCatalogoAdapter;
@@ -33,6 +33,7 @@ import catalogo.replica.infrastructure.redis.RedisCambiosCatalogoAdapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
+import static org.awaitility.Awaitility.await;
 
 @ExtendWith(OutputCaptureExtension.class)
 class IncrementalContratoTest {
@@ -111,38 +112,89 @@ class IncrementalContratoTest {
     @ParameterizedTest
     @EnumSource(value = EstadoProvisionamiento.class, names = {"PENDING", "FAILED", "REVOKED"})
     void noArrancaClientesSinProvisionar(EstadoProvisionamiento estado) {
-        var repo = mock(CatalogoRepository.class); var redis = mock(RedisCambiosCatalogoAdapter.class);
+        var recuperacion = mock(RecuperarCatalogoUseCase.class); var redis = mock(RedisCambiosCatalogoAdapter.class);
         var kafka = mock(KafkaCatalogoConsumer.class); var integration = mock(ObtenerIntegracionCatedraUseCase.class);
-        when(repo.obtenerEstado()).thenReturn(Optional.of(EstadoCatalogo.builder().versionAplicada(7L).build()));
         when(integration.obtener()).thenReturn(integracion(estado));
-        new IncrementalCatalogoInitializer(properties(true), integration, repo, redis, kafka).run(new DefaultApplicationArguments());
-        verifyNoInteractions(redis, kafka);
+        new IncrementalCatalogoInitializer(properties(true), integration, recuperacion, redis, kafka).run(new DefaultApplicationArguments());
+        verifyNoInteractions(redis, recuperacion);
+        verify(kafka, never()).arrancar(any());
     }
 
-    @Test void sinSnapshotNoArrancaConsumoNiConsultaCredenciales() {
-        var repo = mock(CatalogoRepository.class); var redis = mock(RedisCambiosCatalogoAdapter.class);
-        var kafka = mock(KafkaCatalogoConsumer.class); var integration = mock(ObtenerIntegracionCatedraUseCase.class);
-        when(repo.obtenerEstado()).thenReturn(Optional.empty());
-        new IncrementalCatalogoInitializer(properties(true), integration, repo, redis, kafka).run(new DefaultApplicationArguments());
-        verifyNoInteractions(integration, redis, kafka);
+    @Test void conConsumidorActivoRevisaVersionesSinVolverAConectar() {
+        var recuperacion = mock(RecuperarCatalogoUseCase.class);
+        var redis = mock(RedisCambiosCatalogoAdapter.class);
+        var kafka = mock(KafkaCatalogoConsumer.class);
+        var integration = mock(ObtenerIntegracionCatedraUseCase.class);
+        when(kafka.activo()).thenReturn(true);
+        new IncrementalCatalogoInitializer(properties(true), integration, recuperacion, redis, kafka).revisar();
+        verify(recuperacion).recuperar();
+        verifyNoInteractions(integration, redis);
+        verify(kafka, never()).arrancar(any());
     }
 
     @Test void sincronizacionDeshabilitadaNoHaceConexiones() {
-        var repo = mock(CatalogoRepository.class); var redis = mock(RedisCambiosCatalogoAdapter.class);
+        var recuperacion = mock(RecuperarCatalogoUseCase.class); var redis = mock(RedisCambiosCatalogoAdapter.class);
         var kafka = mock(KafkaCatalogoConsumer.class); var integration = mock(ObtenerIntegracionCatedraUseCase.class);
-        new IncrementalCatalogoInitializer(properties(false), integration, repo, redis, kafka).run(new DefaultApplicationArguments());
-        verifyNoInteractions(repo, integration, redis, kafka);
+        new IncrementalCatalogoInitializer(properties(false), integration, recuperacion, redis, kafka).run(new DefaultApplicationArguments());
+        verifyNoInteractions(recuperacion, integration, redis, kafka);
     }
 
     @Test void falloDeRedisCierraRecursosYMantieneElServicioLocalDisponible(CapturedOutput output) {
-        var repo = mock(CatalogoRepository.class); var redis = mock(RedisCambiosCatalogoAdapter.class);
+        var recuperacion = mock(RecuperarCatalogoUseCase.class); var redis = mock(RedisCambiosCatalogoAdapter.class);
         var kafka = mock(KafkaCatalogoConsumer.class); var integration = mock(ObtenerIntegracionCatedraUseCase.class);
-        when(repo.obtenerEstado()).thenReturn(Optional.of(EstadoCatalogo.builder().versionAplicada(7L).build()));
         var config = integracion(EstadoProvisionamiento.PROVISIONED); when(integration.obtener()).thenReturn(config);
         doThrow(new IncrementalCatalogoException(Error.REDIS_NO_DISPONIBLE)).when(redis).preparar(config);
-        new IncrementalCatalogoInitializer(properties(true), integration, repo, redis, kafka).run(new DefaultApplicationArguments());
+        new IncrementalCatalogoInitializer(properties(true), integration, recuperacion, redis, kafka).run(new DefaultApplicationArguments());
         verify(kafka, never()).arrancar(any()); verify(kafka).cerrar(); verify(redis).cerrar();
         assertThat(output).contains("REDIS_NO_DISPONIBLE").doesNotContain(config.getRedisPassword());
+    }
+
+    @Test void reintentaEnElSiguienteCicloYRecuperaAntesDeReanudarKafka() {
+        var recuperacion = mock(RecuperarCatalogoUseCase.class);
+        var redis = mock(RedisCambiosCatalogoAdapter.class);
+        var kafka = mock(KafkaCatalogoConsumer.class);
+        var integration = mock(ObtenerIntegracionCatedraUseCase.class);
+        var config = integracion(EstadoProvisionamiento.PROVISIONED);
+        when(integration.obtener()).thenReturn(config);
+        doThrow(new IncrementalCatalogoException(Error.REDIS_NO_DISPONIBLE)).doNothing()
+                .when(redis).preparar(config);
+
+        var initializer = new IncrementalCatalogoInitializer(properties(true), integration, recuperacion, redis, kafka);
+        initializer.revisar();
+        verify(redis, times(1)).preparar(config);
+        verifyNoInteractions(recuperacion);
+        verify(kafka, never()).arrancar(any());
+
+        initializer.revisar();
+        var orden = inOrder(redis, recuperacion, kafka);
+        orden.verify(redis).cerrar();
+        orden.verify(redis).preparar(config);
+        orden.verify(recuperacion).recuperar();
+        orden.verify(kafka).arrancar(config);
+    }
+
+    @Test void springEjecutaLaRevisionPeriodicaDespuesDelArranque() {
+        var ciclos = new java.util.concurrent.atomic.AtomicInteger();
+        var kafka = mock(KafkaCatalogoConsumer.class);
+        when(kafka.activo()).thenReturn(true);
+        try (var context = new AnnotationConfigApplicationContext()) {
+            TestPropertyValues.of("app.catedra.enabled=true", "app.catedra.sync.recovery-interval=50ms")
+                    .applyTo(context);
+            context.registerBean(IncrementalCatalogoInitializer.class,
+                    () -> new IncrementalCatalogoInitializer(properties(true),
+                            mock(ObtenerIntegracionCatedraUseCase.class),
+                            () -> {
+                                ciclos.incrementAndGet();
+                                return null;
+                            },
+                            mock(RedisCambiosCatalogoAdapter.class), kafka));
+            context.refresh();
+            var initializer = context.getBean(IncrementalCatalogoInitializer.class);
+            initializer.revisarPeriodicamente();
+            assertThat(ciclos).hasValue(0);
+            initializer.run(new DefaultApplicationArguments());
+            await().atMost(Duration.ofSeconds(3)).until(() -> ciclos.get() >= 2);
+        }
     }
 
     private ConsumerRecord<String, String> record(String key, String value) { return new ConsumerRecord<>("catalogo", 0, 13, key, value); }
