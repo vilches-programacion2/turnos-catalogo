@@ -1,15 +1,19 @@
 package catalogo.replica.infrastructure.kafka;
 
 import jakarta.annotation.PreDestroy;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.TopicPartition;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.kafka.KafkaException;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.event.ConsumerStoppedEvent;
 import org.springframework.kafka.listener.CommonContainerStoppingErrorHandler;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.KafkaMessageListenerContainer;
@@ -17,6 +21,9 @@ import org.springframework.stereotype.Component;
 import catalogo.integracion.domain.model.EstadoProvisionamiento;
 import catalogo.integracion.domain.model.IntegracionCatedra;
 import catalogo.replica.infrastructure.config.SincronizacionProperties;
+import catalogo.replica.application.service.MonitorSincronizacionCatalogo;
+import catalogo.replica.application.service.MonitorSincronizacionCatalogo.Fuente;
+import catalogo.replica.domain.model.DiagnosticoCatalogo.Codigo;
 
 @Component
 @RequiredArgsConstructor
@@ -24,6 +31,7 @@ import catalogo.replica.infrastructure.config.SincronizacionProperties;
 public class KafkaCatalogoConsumer {
     private final SincronizacionProperties properties;
     private final CatalogUpdatedListener listener;
+    private final MonitorSincronizacionCatalogo monitor;
     private KafkaMessageListenerContainer<String, String> container;
 
     public synchronized void arrancar(IntegracionCatedra integracion) {
@@ -55,7 +63,26 @@ public class KafkaCatalogoConsumer {
         props.setMissingTopicsFatal(true);
         props.setShutdownTimeout(properties.kafkaOperationTimeout().toMillis());
         props.setMessageListener(listener);
+        props.setConsumerRebalanceListener(new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                monitor.asignacionKafka(false);
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                monitor.asignacionKafka(!partitions.isEmpty());
+            }
+        });
         var result = new KafkaMessageListenerContainer<>(new DefaultKafkaConsumerFactory<String, String>(config), props);
+        result.setApplicationEventPublisher(event -> {
+            if (event instanceof ConsumerStoppedEvent detenido) {
+                monitor.asignacionKafka(false);
+                if (detenido.getReason() != ConsumerStoppedEvent.Reason.NORMAL) {
+                    monitor.registrarError(Fuente.KAFKA_CONEXION, Codigo.KAFKA_NO_DISPONIBLE);
+                }
+            }
+        });
         var errores = new CommonContainerStoppingErrorHandler() {
             @Override public boolean isAckAfterHandle() { return false; }
         };
@@ -72,5 +99,6 @@ public class KafkaCatalogoConsumer {
             container.stop();
             container = null;
         }
+        monitor.asignacionKafka(false);
     }
 }

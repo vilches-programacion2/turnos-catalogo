@@ -31,6 +31,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import catalogo.replica.domain.model.CategoriaProfesional;
+import catalogo.replica.application.service.MonitorSincronizacionCatalogo;
+import catalogo.replica.application.service.MonitorSincronizacionCatalogo.Fuente;
+import catalogo.replica.domain.model.DiagnosticoCatalogo.Codigo;
 import catalogo.replica.domain.model.EstadoCatalogo;
 import catalogo.replica.domain.model.HorarioSemanal;
 import catalogo.replica.domain.model.Profesional;
@@ -59,6 +62,7 @@ class CatalogoConsultasIntegrationTest {
     @Autowired private CatalogoRepository catalogo;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private ApplicationContext context;
+    @Autowired private MonitorSincronizacionCatalogo monitor;
 
     private final JsonMapper json = JsonMapper.builder().build();
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
@@ -66,6 +70,44 @@ class CatalogoConsultasIntegrationTest {
     @BeforeEach
     void limpiarCheckpoint() {
         jdbc.update("DELETE FROM catalog_state");
+    }
+
+    @Test
+    void diagnosticoProtegidoDistingueCopiaAtrasadaYConservaErroresPendientes() throws Exception {
+        String endpoint = "/api/catalog/sync/status";
+        String jwt = JwtTestKeys.token();
+        assertThat(client.send(HttpRequest.newBuilder(uri(endpoint)).GET().build(),
+                HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(401);
+        var respuesta = get(endpoint, jwt);
+        assertThat(respuesta.statusCode()).isEqualTo(200);
+        var cuerpo = json.readTree(respuesta.body());
+        assertThat(cuerpo.path("versionAplicada").isNull()).isTrue();
+        assertThat(cuerpo.path("estado").asString()).isEqualTo("SIN_SNAPSHOT");
+
+        inicializar(0L);
+        assertThat(json.readTree(get(endpoint, jwt).body()).path("estado").asString()).isEqualTo("PENDIENTE");
+        monitor.versionVerificada(0);
+        // El checkpoint y el ciclo exitoso no demuestran que Kafka esté listo.
+        assertThat(json.readTree(get(endpoint, jwt).body()).path("estado").asString()).isEqualTo("PENDIENTE");
+        monitor.asignacionKafka(true);
+        cuerpo = json.readTree(get(endpoint, jwt).body());
+        assertThat(cuerpo.path("versionAplicada").asLong()).isZero();
+        assertThat(cuerpo.path("estado").asString()).isEqualTo("AL_DIA");
+        assertThat(cuerpo.path("ultimoError").isNull()).isTrue();
+
+        monitor.versionVerificada(1);
+        assertThat(json.readTree(get(endpoint, jwt).body()).path("estado").asString()).isEqualTo("DEGRADADO");
+        monitor.versionVerificada(0);
+        monitor.errorEvento(0, 14, Codigo.REDIS_NO_DISPONIBLE);
+        monitor.registrarError(Fuente.REVISION, Codigo.INTEGRACION_NO_DISPONIBLE);
+        monitor.revisionCorrecta();
+        monitor.eventoConfirmado(0, 13);
+        cuerpo = json.readTree(get(endpoint, jwt).body());
+        assertThat(cuerpo.path("estado").asString()).isEqualTo("DEGRADADO");
+        assertThat(cuerpo.path("ultimoError").asString()).isEqualTo("REDIS_NO_DISPONIBLE");
+        assertThat(get("/api/professional-categories", jwt).statusCode()).isEqualTo(200);
+        monitor.eventoConfirmado(0, 14);
+        assertThat(json.readTree(get(endpoint, jwt).body()).path("estado").asString()).isEqualTo("AL_DIA");
     }
 
     @Test
@@ -205,6 +247,7 @@ class CatalogoConsultasIntegrationTest {
         String token = "otra-clave".equals(caso) ? JwtTestKeys.firmaAjena() : JwtTestKeys.firmar(claims, algoritmo);
         assertThat(get(path(profesional), token).statusCode()).isEqualTo(status);
         assertThat(get(path(profesional) + "/schedule", token).statusCode()).isEqualTo(status);
+        assertThat(get("/api/catalog/sync/status", token).statusCode()).isEqualTo(status);
     }
 
     static Stream<Arguments> tokensRechazados() {
