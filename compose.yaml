@@ -1,0 +1,66 @@
+services:
+  catalogo-db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${DB_NAME:-catalogo}
+      POSTGRES_USER: ${DB_USER:-catalogo}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Definir DB_PASSWORD en .env}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5434}:5432"
+    volumes:
+      - catalogo-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    networks: [catalogo]
+
+  catalogo:
+    build: .
+    user: "${APP_UID:-10001}:${APP_GID:-10001}"
+    environment:
+      DB_URL: jdbc:postgresql://catalogo-db:5432/${DB_NAME:-catalogo}
+      DB_USER: ${DB_USER:-catalogo}
+      DB_PASSWORD: ${DB_PASSWORD:?Definir DB_PASSWORD en .env}
+      APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?Definir JWT_PUBLIC_KEY en .env}
+      JWT_ISSUER: ${JWT_ISSUER:-https://turnos-reservas.local}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-turnos-catalogo}
+      CATEDRA_ENABLED: ${CATEDRA_ENABLED:-true}
+      CATEDRA_BASE_URL: ${CATEDRA_BASE_URL:?Definir CATEDRA_BASE_URL en .env}
+      CATEDRA_TOKEN_FILE: /run/secrets/catedra.jwt
+      CATEDRA_CONNECT_TIMEOUT: ${CATEDRA_CONNECT_TIMEOUT:-3s}
+      CATEDRA_READ_TIMEOUT: ${CATEDRA_READ_TIMEOUT:-5s}
+      CATEDRA_SYNC_ENABLED: ${CATEDRA_SYNC_ENABLED:-true}
+      CATEDRA_SYNC_RECOVERY_INTERVAL: ${CATEDRA_SYNC_RECOVERY_INTERVAL:-60s}
+      CATEDRA_SYNC_CONNECT_TIMEOUT: ${CATEDRA_SYNC_CONNECT_TIMEOUT:-3s}
+      CATEDRA_SYNC_COMMAND_TIMEOUT: ${CATEDRA_SYNC_COMMAND_TIMEOUT:-5s}
+      CATEDRA_KAFKA_SECURITY_PROTOCOL: ${CATEDRA_KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
+      CATEDRA_KAFKA_REQUEST_TIMEOUT: ${CATEDRA_KAFKA_REQUEST_TIMEOUT:-5s}
+      CATEDRA_KAFKA_OPERATION_TIMEOUT: ${CATEDRA_KAFKA_OPERATION_TIMEOUT:-10s}
+    volumes:
+      - type: bind
+        source: ./secrets/public.pem
+        target: /run/secrets/public.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CATEDRA_TOKEN_SOURCE:?Definir CATEDRA_TOKEN_SOURCE en .env}
+        target: /run/secrets/catedra.jwt
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:${APP_PORT:-8082}:8080"
+    depends_on:
+      catalogo-db:
+        condition: service_healthy
+    networks: [catalogo]
+
+volumes:
+  catalogo-data:
+
+networks:
+  catalogo:
