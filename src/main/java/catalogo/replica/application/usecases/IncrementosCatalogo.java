@@ -6,6 +6,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import catalogo.replica.application.exception.IncrementalCatalogoException;
 import catalogo.replica.application.exception.IncrementalCatalogoException.Error;
+import catalogo.replica.application.service.MonitorSincronizacionCatalogo;
 import catalogo.replica.application.validation.CambioCatalogoValidator;
 import catalogo.replica.application.validation.SnapshotCatalogoValidator;
 import catalogo.replica.domain.model.EstadoCatalogo;
@@ -23,6 +24,7 @@ class IncrementosCatalogo {
     private final CambioCatalogoValidator validator;
     private final SnapshotCatalogoClient snapshots;
     private final SnapshotCatalogoValidator snapshotValidator;
+    private final MonitorSincronizacionCatalogo monitor;
 
     // Kafka y la revisión periódica comparten la misma secuencia de lecturas y escrituras.
     synchronized EstadoCatalogo aplicar(EstadoCatalogo estado, long notificada) {
@@ -51,7 +53,9 @@ class IncrementosCatalogo {
         } catch (DataIntegrityViolationException e) {
             log.warn("Reconstrucción de catálogo requerida: codigo=REFERENCIAS_INCONSISTENTES");
         }
-        return reemplazar(metadata.getCurrentVersion());
+        var reemplazado = reemplazar(metadata.getCurrentVersion());
+        monitor.versionVerificada(Math.max(metadata.getCurrentVersion(), reemplazado.getVersionAplicada()));
+        return reemplazado;
     }
 
     private EstadoCatalogo reemplazar(long versionMinima) {
@@ -72,6 +76,7 @@ class IncrementosCatalogo {
                 || metadata.getCurrentVersion() < metadata.getOldestAvailableVersion()) {
             throw new IncrementalCatalogoException(Error.RESPUESTA_INVALIDA);
         }
+        monitor.versionVerificada(metadata.getCurrentVersion());
         return metadata;
     }
 

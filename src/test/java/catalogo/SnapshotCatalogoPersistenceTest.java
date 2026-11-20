@@ -37,6 +37,7 @@ import catalogo.replica.domain.model.SnapshotCatalogo;
 import catalogo.replica.domain.ports.out.CatalogoRepository;
 import catalogo.replica.domain.ports.out.SnapshotCatalogoClient;
 import catalogo.replica.infrastructure.config.SnapshotCatalogoInitializer;
+import catalogo.replica.application.service.MonitorSincronizacionCatalogo;
 import tools.jackson.databind.json.JsonMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -218,7 +219,7 @@ class SnapshotCatalogoPersistenceTest {
     @Test
     void falloInicialDejaServicioSinCheckpointYPermiteReintentarAlReiniciar(CapturedOutput output) {
         descarga.respuesta = () -> { throw new SnapshotCatalogoException(Error.NO_AUTENTICADO, 401); };
-        var inicializador = new SnapshotCatalogoInitializer(service);
+        var inicializador = new SnapshotCatalogoInitializer(service, new MonitorSincronizacionCatalogo("60s"));
         assertThatCode(() -> inicializador.run(new DefaultApplicationArguments())).doesNotThrowAnyException();
         assertThat(catalogo.obtenerEstado()).isEmpty();
         assertThat(output).contains("Inicialización de catálogo pendiente: error=NO_AUTENTICADO httpStatus=401");

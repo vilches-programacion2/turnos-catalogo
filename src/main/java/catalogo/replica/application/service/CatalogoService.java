@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import catalogo.replica.application.exception.ProfesionalNoEncontradoException;
 import catalogo.replica.domain.model.AgendaProfesional;
+import catalogo.replica.domain.model.DiagnosticoCatalogo;
 import catalogo.replica.domain.model.Profesional;
 import catalogo.replica.domain.ports.in.ObtenerAgendaProfesionalUseCase;
 import catalogo.replica.domain.ports.in.ObtenerProfesionalUseCase;
@@ -13,6 +14,7 @@ import catalogo.replica.domain.ports.in.SincronizarCatalogoUseCase;
 import catalogo.replica.domain.ports.in.BuscarProfesionalesUseCase;
 import catalogo.replica.domain.ports.in.ListarCategoriasUseCase;
 import catalogo.replica.domain.ports.in.ActualizarCatalogoUseCase;
+import catalogo.replica.domain.ports.in.ConsultarEstadoSincronizacionUseCase;
 import catalogo.replica.domain.model.FiltroProfesionales;
 import catalogo.replica.domain.model.LecturaBusquedaProfesionales;
 import catalogo.replica.domain.model.LecturaCategorias;
@@ -27,6 +29,11 @@ public class CatalogoService {
     private final BuscarProfesionalesUseCase buscarProfesionales;
     private final ListarCategoriasUseCase listarCategorias;
     private final ActualizarCatalogoUseCase actualizarCatalogo;
+    private final ConsultarEstadoSincronizacionUseCase estadoSincronizacion;
+
+    public DiagnosticoCatalogo consultarEstadoSincronizacion() {
+        return estadoSincronizacion.consultar();
+    }
 
     public EstadoCatalogo actualizar(String eventId, Long nuevaVersion) {
         return actualizarCatalogo.actualizar(eventId, nuevaVersion);

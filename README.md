@@ -134,11 +134,22 @@ personalizarlos allí hay que pasarlos al entorno del servicio Catálogo.
 | GET | `/api/professional-categories` | Categorías con ID, nombre, habilitación y versión aplicada. |
 | GET | `/api/professionals/{id}` | Detalle del profesional, incluido su estado habilitado. |
 | GET | `/api/professionals/{id}/schedule` | Versión aplicada y horarios semanales habilitados. |
+| GET | `/api/catalog/sync/status` | Versión aplicada, estado de sincronización y último error activo. |
 
 Todas requieren JWT Bearer de usuario. Usan únicamente la última versión aplicada localmente.
-Sin una sincronización inicial responden `503 CATALOG_NOT_READY`. La agenda
+Sin una sincronización inicial, las consultas de profesionales y categorías
+responden `503 CATALOG_NOT_READY`. La agenda
 semanal no representa turnos libres: reservas combinará
 horarios, fecha y ocupaciones.
+
+### Estado de sincronización — CAT-09
+
+`GET /api/catalog/sync/status` devuelve `versionAplicada`, `estado` y
+`ultimoError`. `SIN_SNAPSHOT` indica que falta la primera copia.
+`PENDIENTE` indica que falta una verificación reciente o asignación Kafka.
+`DEGRADADO` indica atraso comprobado o un error activo. `AL_DIA` corresponde
+a la última versión comprobada. Los códigos de error se conservan en memoria
+durante la ejecución y la versión aplicada se lee de PostgreSQL.
 
 ### Búsqueda — CAT-08
 

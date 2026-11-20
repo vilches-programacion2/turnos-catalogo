@@ -25,6 +25,7 @@ import catalogo.integracion.domain.ports.in.ObtenerIntegracionCatedraUseCase;
 import catalogo.replica.application.exception.IncrementalCatalogoException;
 import catalogo.replica.application.exception.IncrementalCatalogoException.Error;
 import catalogo.replica.application.service.CatalogoService;
+import catalogo.replica.application.service.MonitorSincronizacionCatalogo;
 import catalogo.replica.domain.ports.in.RecuperarCatalogoUseCase;
 import catalogo.replica.infrastructure.config.IncrementalCatalogoInitializer;
 import catalogo.replica.infrastructure.config.SincronizacionProperties;
@@ -44,10 +45,11 @@ class IncrementalContratoTest {
     private CatalogoService catalogo;
     private CatalogUpdatedListener listener;
     private Acknowledgment ack;
+    private final MonitorSincronizacionCatalogo monitor = new MonitorSincronizacionCatalogo("60s");
 
     @BeforeEach void preparar() {
         catalogo = mock(CatalogoService.class); ack = mock(Acknowledgment.class);
-        listener = new CatalogUpdatedListener(catalogo, JsonMapper.builder().build());
+        listener = new CatalogUpdatedListener(catalogo, JsonMapper.builder().build(), monitor);
     }
 
     @Test void respetaElContratoYElOrdenDePersistenciaYConfirmacion() {
@@ -94,7 +96,7 @@ class IncrementalContratoTest {
         var config = new AtomicReference<Map<String, Object>>();
         var topic = new AtomicReference<String>();
         @SuppressWarnings("unchecked") var container = (KafkaMessageListenerContainer<String, String>) mock(KafkaMessageListenerContainer.class);
-        var consumer = new KafkaCatalogoConsumer(properties(true), listener) {
+        var consumer = new KafkaCatalogoConsumer(properties(true), listener, monitor) {
             @Override protected KafkaMessageListenerContainer<String, String> crearContenedor(Map<String, Object> values, String value) {
                 config.set(values); topic.set(value); return container;
             }
@@ -115,7 +117,7 @@ class IncrementalContratoTest {
         var recuperacion = mock(RecuperarCatalogoUseCase.class); var redis = mock(RedisCambiosCatalogoAdapter.class);
         var kafka = mock(KafkaCatalogoConsumer.class); var integration = mock(ObtenerIntegracionCatedraUseCase.class);
         when(integration.obtener()).thenReturn(integracion(estado));
-        new IncrementalCatalogoInitializer(properties(true), integration, recuperacion, redis, kafka).run(new DefaultApplicationArguments());
+        new IncrementalCatalogoInitializer(properties(true), integration, recuperacion, redis, kafka, monitor).run(new DefaultApplicationArguments());
         verifyNoInteractions(redis, recuperacion);
         verify(kafka, never()).arrancar(any());
     }
@@ -126,7 +128,7 @@ class IncrementalContratoTest {
         var kafka = mock(KafkaCatalogoConsumer.class);
         var integration = mock(ObtenerIntegracionCatedraUseCase.class);
         when(kafka.activo()).thenReturn(true);
-        new IncrementalCatalogoInitializer(properties(true), integration, recuperacion, redis, kafka).revisar();
+        new IncrementalCatalogoInitializer(properties(true), integration, recuperacion, redis, kafka, monitor).revisar();
         verify(recuperacion).recuperar();
         verifyNoInteractions(integration, redis);
         verify(kafka, never()).arrancar(any());
@@ -135,7 +137,7 @@ class IncrementalContratoTest {
     @Test void sincronizacionDeshabilitadaNoHaceConexiones() {
         var recuperacion = mock(RecuperarCatalogoUseCase.class); var redis = mock(RedisCambiosCatalogoAdapter.class);
         var kafka = mock(KafkaCatalogoConsumer.class); var integration = mock(ObtenerIntegracionCatedraUseCase.class);
-        new IncrementalCatalogoInitializer(properties(false), integration, recuperacion, redis, kafka).run(new DefaultApplicationArguments());
+        new IncrementalCatalogoInitializer(properties(false), integration, recuperacion, redis, kafka, monitor).run(new DefaultApplicationArguments());
         verifyNoInteractions(recuperacion, integration, redis, kafka);
     }
 
@@ -144,7 +146,7 @@ class IncrementalContratoTest {
         var kafka = mock(KafkaCatalogoConsumer.class); var integration = mock(ObtenerIntegracionCatedraUseCase.class);
         var config = integracion(EstadoProvisionamiento.PROVISIONED); when(integration.obtener()).thenReturn(config);
         doThrow(new IncrementalCatalogoException(Error.REDIS_NO_DISPONIBLE)).when(redis).preparar(config);
-        new IncrementalCatalogoInitializer(properties(true), integration, recuperacion, redis, kafka).run(new DefaultApplicationArguments());
+        new IncrementalCatalogoInitializer(properties(true), integration, recuperacion, redis, kafka, monitor).run(new DefaultApplicationArguments());
         verify(kafka, never()).arrancar(any()); verify(kafka).cerrar(); verify(redis).cerrar();
         assertThat(output).contains("REDIS_NO_DISPONIBLE").doesNotContain(config.getRedisPassword());
     }
@@ -159,7 +161,7 @@ class IncrementalContratoTest {
         doThrow(new IncrementalCatalogoException(Error.REDIS_NO_DISPONIBLE)).doNothing()
                 .when(redis).preparar(config);
 
-        var initializer = new IncrementalCatalogoInitializer(properties(true), integration, recuperacion, redis, kafka);
+        var initializer = new IncrementalCatalogoInitializer(properties(true), integration, recuperacion, redis, kafka, monitor);
         initializer.revisar();
         verify(redis, times(1)).preparar(config);
         verifyNoInteractions(recuperacion);
@@ -187,7 +189,7 @@ class IncrementalContratoTest {
                                 ciclos.incrementAndGet();
                                 return null;
                             },
-                            mock(RedisCambiosCatalogoAdapter.class), kafka));
+                            mock(RedisCambiosCatalogoAdapter.class), kafka, monitor));
             context.refresh();
             var initializer = context.getBean(IncrementalCatalogoInitializer.class);
             initializer.revisarPeriodicamente();

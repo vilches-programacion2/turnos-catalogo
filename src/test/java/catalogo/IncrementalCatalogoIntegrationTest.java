@@ -47,6 +47,7 @@ import catalogo.replica.application.exception.IncrementalCatalogoException;
 import catalogo.replica.application.exception.IncrementalCatalogoException.Error;
 import catalogo.replica.application.service.CatalogoService;
 import catalogo.replica.domain.model.CambioCatalogo;
+import catalogo.replica.domain.model.DiagnosticoCatalogo;
 import catalogo.replica.domain.ports.out.CatalogoRepository;
 import catalogo.replica.infrastructure.kafka.CatalogUpdatedListener;
 import catalogo.replica.infrastructure.kafka.KafkaCatalogoConsumer;
@@ -156,6 +157,18 @@ class IncrementalCatalogoIntegrationTest {
         assertThat(ack).hasValue(0);
         assertThat(catalogo.obtenerEstado().orElseThrow().getVersionAplicada()).isEqualTo(7);
         assertThat(catalogo.buscarEventoProcesado("redis-caido-8")).isEmpty();
+        var diagnostico = service.consultarEstadoSincronizacion();
+        assertThat(diagnostico.versionAplicada()).isEqualTo(7L);
+        assertThat(diagnostico.estado()).isEqualTo(DiagnosticoCatalogo.Estado.DEGRADADO);
+        assertThat(diagnostico.ultimoError()).isEqualTo(DiagnosticoCatalogo.Codigo.REDIS_NO_DISPONIBLE);
+
+        adapter.preparar(config("topic-prueba", "grupo-prueba"));
+        cambioProfesional(8, false);
+        listener.onMessage(record("redis-caido-8", 8), ack::incrementAndGet);
+        assertThat(ack).hasValue(1);
+        assertThat(service.consultarEstadoSincronizacion().versionAplicada()).isEqualTo(8L);
+        assertThat(service.consultarEstadoSincronizacion().ultimoError())
+                .isNotEqualTo(DiagnosticoCatalogo.Codigo.REDIS_NO_DISPONIBLE);
     }
 
     @Test
