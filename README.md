@@ -9,6 +9,9 @@ integración técnica de cátedra y CAT-05 inicializa la copia mediante snapshot
 CAT-08 agrega búsqueda local paginada y listado de categorías.
 CAT-06 aplica cambios incrementales notificados por Kafka y leídos desde Redis.
 
+El [modelo de datos y manual de sincronización](docs/catalogo.md) describe
+los contratos, la recuperación y las pruebas del servicio.
+
 ## Ejecutar
 
 Con Docker Compose:
