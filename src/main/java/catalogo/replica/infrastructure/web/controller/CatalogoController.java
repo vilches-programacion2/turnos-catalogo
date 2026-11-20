@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -93,7 +94,7 @@ public class CatalogoController {
         return problema(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "Los parámetros de consulta no son válidos.");
     }
 
-    @ExceptionHandler(DataAccessException.class)
+    @ExceptionHandler({DataAccessException.class, CannotCreateTransactionException.class})
     public ProblemDetail persistenciaNoDisponible() {
         log.warn("Consulta de catálogo fallida: resultado=error codigo=CATALOG_UNAVAILABLE");
         return problema(HttpStatus.SERVICE_UNAVAILABLE, "CATALOG_UNAVAILABLE", "El catálogo no está disponible.");

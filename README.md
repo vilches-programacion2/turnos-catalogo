@@ -194,6 +194,11 @@ no necesitan la VPN ni credenciales reales. Los GET de salud siguen siendo públ
 El snapshot tiene pruebas de reemplazo, rollback, validación, reinicio y
 escrituras concurrentes sin retroceso de versión.
 
+La suite incremental usa también Kafka y Redis locales. Comprueba el orden
+de versiones, la deduplicación, la recuperación en el límite del historial
+y el reemplazo por snapshot cuando falta un cambio. Las pruebas HTTP cubren
+filtros, permisos y el diagnóstico cuando la base está caída.
+
 El wrapper incluido utiliza Maven 3.9.11; requiere JDK 25.
 
 Una rama por issue, con PR a `dev`. Promociones a `test` y `main` mediante PR.
