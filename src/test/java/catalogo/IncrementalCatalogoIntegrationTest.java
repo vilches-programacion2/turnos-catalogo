@@ -327,9 +327,10 @@ class IncrementalCatalogoIntegrationTest {
         }
     }
 
-    @Test
-    void recuperaVersionesRetenidasAunqueNoLlegueKafka() {
-        metadata(9, 0);
+    @ParameterizedTest
+    @ValueSource(longs = {0, 7})
+    void recuperaVersionesRetenidasAunqueNoLlegueKafka(long versionMasAntigua) {
+        metadata(9, versionMasAntigua);
         cambioProfesional(8, false);
         redis.set("catedra:sync:changes:9", cambioJson(9, "[]", "[]", "[]"));
 

@@ -6,6 +6,7 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,7 +25,7 @@ public class EstadoSincronizacionController {
                 .body(new EstadoSincronizacionResponse(estado.versionAplicada(), estado.estado(), estado.ultimoError()));
     }
 
-    @ExceptionHandler(DataAccessException.class)
+    @ExceptionHandler({DataAccessException.class, CannotCreateTransactionException.class})
     public ProblemDetail persistenciaNoDisponible() {
         var problema = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
                 "No se pudo consultar el estado de sincronización.");

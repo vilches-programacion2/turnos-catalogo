@@ -54,6 +54,20 @@ class ServiceBootstrapTest {
         DATABASE.stop();
         assertHealth("/actuator/health/readiness", 503, "DOWN");
         assertHealth("/actuator/health/liveness", 200, "UP");
+
+        assertCatalogUnavailable("/api/catalog/sync/status", "CATALOG_STATUS_UNAVAILABLE");
+        assertCatalogUnavailable("/api/professionals", "CATALOG_UNAVAILABLE");
+    }
+
+    private void assertCatalogUnavailable(String path, String code) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .timeout(Duration.ofSeconds(10))
+                .header("Authorization", "Bearer " + JwtTestKeys.token())
+                .GET().build();
+        var response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(503);
+        assertThat(response.body()).contains(code)
+                .doesNotContain("SIN_SNAPSHOT", "versionAplicada", "jdbc:", "password", "stackTrace");
     }
 
     private void assertHealth(String path, int status, String state) throws Exception {

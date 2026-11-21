@@ -9,6 +9,9 @@ integración técnica de cátedra y CAT-05 inicializa la copia mediante snapshot
 CAT-08 agrega búsqueda local paginada y listado de categorías.
 CAT-06 aplica cambios incrementales notificados por Kafka y leídos desde Redis.
 
+El [modelo de datos y manual de sincronización](docs/catalogo.md) describe
+los contratos, la recuperación y las pruebas del servicio.
+
 ## Ejecutar
 
 Con Docker Compose:
@@ -193,6 +196,11 @@ de integración técnica usan respuestas simuladas y servidores HTTP locales:
 no necesitan la VPN ni credenciales reales. Los GET de salud siguen siendo públicos.
 El snapshot tiene pruebas de reemplazo, rollback, validación, reinicio y
 escrituras concurrentes sin retroceso de versión.
+
+La suite incremental usa también Kafka y Redis locales. Comprueba el orden
+de versiones, la deduplicación, la recuperación en el límite del historial
+y el reemplazo por snapshot cuando falta un cambio. Las pruebas HTTP cubren
+filtros, permisos y el diagnóstico cuando la base está caída.
 
 El wrapper incluido utiliza Maven 3.9.11; requiere JDK 25.
 
